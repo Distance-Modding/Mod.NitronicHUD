@@ -1,5 +1,4 @@
 ﻿using Distance.NitronicHUD.Data;
-using Reactor.API.Storage;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -30,12 +29,12 @@ namespace Distance.NitronicHUD.Scripts
 		{
 			if (loadBundle)
 			{
-				Assets = new Assets("countdown.assets");
+				Assets = new Assets("countdown.assets", true);
 			}
 
 			if (!Bundle)
 			{
-				Mod.Instance.Logger.Error("The following assets file could not be loaded: countdown.assets");
+				Mod.Log.LogInfo("The following assets file could not be loaded: countdown.assets");
 
 				DestroyImmediate(this);
 				return;
@@ -45,7 +44,7 @@ namespace Distance.NitronicHUD.Scripts
 
 			if (!Prefab)
 			{
-				Mod.Instance.Logger.Error($"The following asset from the countdown.assets could not be loaded: \"{AssetName}\"");
+				Mod.Log.LogInfo($"The following asset from the countdown.assets could not be loaded: \"{AssetName}\"");
 
 				DestroyImmediate(this);
 				return;
@@ -106,12 +105,10 @@ namespace Distance.NitronicHUD.Scripts
 				return;
 			}
 
-			ConfigurationLogic config = Mod.Instance.Config;
-
 			float time = (float)Timex.ModeTime_;
 
 			// Make visible only in game mode
-			if (!config.DisplayCountdown || !Flags.CanDisplayHudElements)
+			if (!Mod.DisplayCountdown.Value || !Flags.CanDisplayHudElements)
 			{
 				time = -10;
 			}

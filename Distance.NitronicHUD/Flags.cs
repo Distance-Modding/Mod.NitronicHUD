@@ -3,6 +3,7 @@ using Events.GameMode;
 using Events.Level;
 using Events.LevelEditor;
 using Events.RaceEnd;
+using Events.Scene;
 using System.Linq;
 
 namespace Distance.NitronicHUD
@@ -50,6 +51,19 @@ namespace Distance.NitronicHUD
 			EnterPlayMode.Subscribe(OnLevelEditorEnterPlayMode);
 			EnterEditorMode.Subscribe(OnLevelEditorEnterEditorMode);
 			UninitializeOptimizations.Subscribe(OnLevelUninitializeOptimizations);
+			BeginSceneSwitchFadeOut.Subscribe(OnSceneChanged);
+		}
+
+		internal static void UnsubscribeEvents()
+        {
+			PauseToggled.Unsubscribe(OnGamePauseToggled);
+			ModeInitialized.Unsubscribe(OnGameModeInitialized);
+			ModeStarted.Unsubscribe(OnGameModeModeStarted);
+			LocalCarHitFinish.Unsubscribe(OnRaceEndLocalCarHitFinish);
+			EnterPlayMode.Unsubscribe(OnLevelEditorEnterPlayMode);
+			EnterEditorMode.Unsubscribe(OnLevelEditorEnterEditorMode);
+			UninitializeOptimizations.Unsubscribe(OnLevelUninitializeOptimizations);
+			BeginSceneSwitchFadeOut.Unsubscribe(OnSceneChanged);
 		}
 
 		private static void OnLevelUninitializeOptimizations(UninitializeOptimizations.Data data)
@@ -88,5 +102,10 @@ namespace Distance.NitronicHUD
 		{
 			IsPaused = data.paused_;
 		}
+
+		private static void OnSceneChanged(BeginSceneSwitchFadeOut.Data data)
+        {
+			IsModeStarted = false;
+        }
 	}
 }

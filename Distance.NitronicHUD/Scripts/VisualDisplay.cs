@@ -1,7 +1,5 @@
-﻿using Centrifuge.Distance.Game;
-using Distance.NitronicHUD.Data;
+﻿using Distance.NitronicHUD.Data;
 using HarmonyLib;
-using Reactor.API.Storage;
 using System;
 using System.Globalization;
 using System.Text;
@@ -33,12 +31,12 @@ namespace Distance.NitronicHUD.Scripts
 		{
 			if (loadBundle)
 			{
-				Assets = new Assets("hud.assets");
+				Assets = new Assets("hud.assets", true);
 			}
 
 			if (!Bundle)
 			{
-				Mod.Instance.Logger.Error("The following assets file could not be loaded: hud.assets");
+				Mod.Log.LogInfo("The following assets file could not be loaded: hud.assets");
 
 				DestroyImmediate(this);
 				return;
@@ -48,7 +46,7 @@ namespace Distance.NitronicHUD.Scripts
 
 			if (!Prefab)
 			{
-				Mod.Instance.Logger.Error($"The following asset from the hud.assets could not be loaded: \"{AssetName}\"");
+				Mod.Log.LogInfo($"The following asset from the hud.assets could not be loaded: \"{AssetName}\"");
 
 				DestroyImmediate(this);
 				return;
@@ -95,18 +93,14 @@ namespace Distance.NitronicHUD.Scripts
 		#region Object Active States
 		private void UpdateVisibility()
 		{
-			ConfigurationLogic config = Mod.Instance.Config;
-
-			huds_.Do(x => x.rectTransform.gameObject.SetActive((Flags.CanDisplayHudElements && config.DisplayHeatMeters) || ForceDisplay));
-			timer_?.gameObject?.SetActive((Flags.CanDisplayHudElements && config.DisplayTimer) || ForceDisplay);
+			huds_.Do(x => x.rectTransform.gameObject.SetActive((Flags.CanDisplayHudElements && Mod.DisplayHeatMeter.Value) || ForceDisplay));
+			timer_?.gameObject?.SetActive((Flags.CanDisplayHudElements && Mod.DisplayTimer.Value) || ForceDisplay);
 		}
 		#endregion
 
 		#region Size / Position Logic
 		public void UpdateTransforms()
 		{
-			ConfigurationLogic config = Mod.Instance.Config;
-
 			if (huds_.Length >= 2)
 			{
 				for (int x = 0; x <= 1; x++)
@@ -114,10 +108,10 @@ namespace Distance.NitronicHUD.Scripts
 					float direction = x == 0 ? 1 : -1;
 
 					const float defaultScale = 1.7f;
-					float newScale = defaultScale * config.HeatMetersScale;
+					float newScale = defaultScale * (Mod.HeatMeterScale.Value / 30f);
 
 					huds_[x].rectTransform.localScale = new Vector3(newScale * direction, newScale, newScale);
-					huds_[x].rectTransform.anchoredPosition = new Vector2(config.HeatMetersHorizontalOffset * direction, config.HeatMetersVerticalOffset);
+					huds_[x].rectTransform.anchoredPosition = new Vector2(Mod.HeatMetersHorizontalOffset.Value * direction, Mod.HeatMetersVerticalOffset.Value);
 				}
 			}
 
@@ -129,8 +123,8 @@ namespace Distance.NitronicHUD.Scripts
 
 				if (rect)
 				{
-					rect.localScale = Vector2.one * defaultScale * config.TimerScale;
-					rect.anchoredPosition = new Vector2(0, config.TimerVerticalOffset + 45);
+					rect.localScale = Vector2.one * defaultScale * (Mod.TimerScale.Value / 30f);
+					rect.anchoredPosition = new Vector2(0, Mod.TimerVerticalOffset.Value + 45);
 				}
 			}
 		}
@@ -139,7 +133,6 @@ namespace Distance.NitronicHUD.Scripts
 		#region Overheat Meter
 		private void UpdateHeatIndicators()
 		{
-			ConfigurationLogic config = Mod.Instance.Config;
 			try
 			{
 				float heat = Mathf.Clamp(Vehicle.HeatLevel, 0, 1);
@@ -160,19 +153,19 @@ namespace Distance.NitronicHUD.Scripts
 
 						float blink = 0;
 
-						if (heat > config.HeatBlinkStartAmount)
+						if (heat > Mod.HeatBlinkStartAmount.Value)
 						{
-							blink = (heat - config.HeatBlinkStartAmount) / (1 - config.HeatBlinkStartAmount);
+							blink = (heat - Mod.HeatBlinkStartAmount.Value) / (1 - Mod.HeatBlinkStartAmount.Value);
 						}
 
-						blink *= (0.5f * Mathf.Sin((float)Timex.ModeTime_ * (config.HeatBlinkFrequence - ((1 - heat) * heat * config.HeatBlinkFrequenceBoost)) * 3 * Mathf.PI)) + 0.5f;
-						instance.main.color = new Color(1, 1 - (blink * config.HeatBlinkAmount), 1 - (blink * config.HeatBlinkAmount));
+						blink *= (0.5f * Mathf.Sin((float)Timex.ModeTime_ * (Mod.HeatBlinkFrequency.Value - ((1 - heat) * heat * Mod.HeatBlinkFrequencyBoost.Value)) * 3 * Mathf.PI)) + 0.5f;
+						instance.main.color = new Color(1, 1 - (blink * Mod.HeatBlinkAmount.Value), 1 - (blink * Mod.HeatBlinkAmount.Value));
 
 						float flame = 0;
 
-						if (heat > config.HeatFlameAmount)
+						if (heat > Mod.HeatFlameAmount.Value)
 						{
-							flame = (heat - config.HeatFlameAmount) / (1 - config.HeatFlameAmount);
+							flame = (heat - Mod.HeatFlameAmount.Value) / (1 - Mod.HeatFlameAmount.Value);
 						}
 
 						instance.flame.color = new Color(1, 1, 1, flame);
@@ -181,7 +174,7 @@ namespace Distance.NitronicHUD.Scripts
 			}
 			catch (Exception ex)
 			{
-				Mod.Instance.Logger.Exception(ex);
+				Mod.Log.LogError(ex);
 			}
 		}
 		#endregion
@@ -263,7 +256,7 @@ namespace Distance.NitronicHUD.Scripts
 		{
 			if (G.Sys.GameManager_.IsModeStarted_)
 			{
-				switch (Centrifuge.Distance.Game.Options.General.Units)
+				switch (G.Sys.OptionsManager_.General_.Units_)
 				{
 					case Units.Metric:
 						return Vehicle.VelocityKPH;
@@ -281,7 +274,7 @@ namespace Distance.NitronicHUD.Scripts
 
 		private string GetSpeedUnit()
 		{
-			switch (Centrifuge.Distance.Game.Options.General.Units)
+			switch (G.Sys.OptionsManager_.General_.Units_)
 			{
 				case Units.Metric:
 					return "KM/H";

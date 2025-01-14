@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Distance.NitronicHUD.Harmony
+namespace Distance.NitronicHUD.Patches
 {
 	[HarmonyPatch(typeof(StatsManager), "OnEventPlayerAdded")]
 	internal static class StatsManager__OnEventPlayerAdded

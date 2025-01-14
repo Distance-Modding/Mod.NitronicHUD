@@ -1,198 +1,184 @@
-﻿#pragma warning disable IDE0028
-using Centrifuge.Distance.Data;
-using Centrifuge.Distance.Game;
-using Centrifuge.Distance.GUI.Controls;
-using Centrifuge.Distance.GUI.Data;
+﻿using BepInEx;
+using BepInEx.Configuration;
+using BepInEx.Logging;
 using Distance.NitronicHUD.Scripts;
-using Events.GUI;
-using Reactor.API.Attributes;
-using Reactor.API.Interfaces.Systems;
-using Reactor.API.Logging;
-using Reactor.API.Runtime.Patching;
+using HarmonyLib;
+using System;
 using UnityEngine;
 
 namespace Distance.NitronicHUD
 {
-	[ModEntryPoint("com.github.reherc/Distance.NitronicHUD")]
-	public class Mod : MonoBehaviour
+	[BepInPlugin(modGUID, modName, modVersion)]
+	public sealed class Mod : BaseUnityPlugin
 	{
-		public static Mod Instance;
+		//Mod Details
+		private const string modGUID = "Distance.NitronicHUD";
+		private const string modName = "Nitronic HUD";
+		private const string modVersion = "1.0.0";
 
-		public IManager Manager { get; set; }
+		//Config Entry Strings
+		public static string DisplayHeatMeterKey = "Display Heat Meter";
+		public static string DisplayCountdownKey = "Display Countdown";
+		public static string DisplayTimerKey = "Display Timer";
+		public static string AnnouncerCountdownKey = "Display Countdown";
+		public static string HeatMeterScaleKey = "Overheat Scale";
+		public static string HeatMeterHorizontalKey = "Overheat HOffset";
+		public static string HeatMeterVerticalKey = "Overheat VOffset";
+		public static string TimerScaleKey = "Timer Scale";
+		public static string TimerVeritcalKey = "Timer VOffset";
+		public static string HeatBlinkStartAmountKey = "Blink Start";
+		public static string HeatBlinkFrequencyKey = "Blink Frequency";
+		public static string HeatBlinkFrequencyBoostKey = "Blink Freq Boost";
+		public static string HeatBlinkAmountKey = "Heat Blink Amount";
+		public static string HeatFlameAmountKey = "Heat Flame Amount";
 
-		public Log Logger { get; set; }
+		//Config Entries
+		public static ConfigEntry<bool> DisplayHeatMeter { get; set; }
+		public static ConfigEntry<bool> DisplayCountdown { get; set; }
+		public static ConfigEntry<bool> DisplayTimer { get; set; }
+		//public static ConfigEntry<bool> AnnouncerCountdown { get; set; }
+		public static ConfigEntry<float> HeatMeterScale { get; set; }
+		public static ConfigEntry<int> HeatMetersHorizontalOffset { get; set; }
+		public static ConfigEntry<int> HeatMetersVerticalOffset { get; set; }
+		public static ConfigEntry<float> TimerScale { get; set; }
+		public static ConfigEntry<int> TimerVerticalOffset { get; set; }
+		public static ConfigEntry<float> HeatBlinkStartAmount { get; set; }
+		public static ConfigEntry<float> HeatBlinkFrequency { get; set; }
+		public static ConfigEntry<float> HeatBlinkFrequencyBoost { get; set; }
+		public static ConfigEntry<float> HeatBlinkAmount { get; set; }
+		public static ConfigEntry<float> HeatFlameAmount { get; set; }
 
-		public ConfigurationLogic Config { get; private set; }
-
+		//Public Variables
 		public MonoBehaviour[] Scripts { get; set; }
 
-		public void Initialize(IManager manager)
+		//Other
+		private static readonly Harmony harmony = new Harmony(modGUID);
+		public static ManualLogSource Log = new ManualLogSource(modName);
+		public static Mod Instance;
+
+		public void Awake()
 		{
 			DontDestroyOnLoad(this);
 
-			Flags.SubscribeEvents();
+			if (Instance == null)
+			{
+				Instance = this;
+			}
 
-			Instance = this;
-			Manager = manager;
-			Logger = LogManager.GetForCurrentAssembly();
-			Config = gameObject.AddComponent<ConfigurationLogic>();
+			Log = BepInEx.Logging.Logger.CreateLogSource(modGUID);
+			Logger.LogInfo("Thanks for using Nitronic HUD!");
 
-			RuntimePatcher.AutoPatch();
+			//Config Setup
+			DisplayCountdown = Config.Bind<bool>("Interface Options",
+				DisplayCountdownKey,
+				true,
+				new ConfigDescription("Displays the 3... 2... 1... RUSH countdown when playing a level."));
 
-			MenuOpened.Subscribe(OnGUIMenuOpened);
+			DisplayHeatMeter = Config.Bind<bool>("Interface Options",
+				DisplayHeatMeterKey,
+				true,
+				new ConfigDescription("Displays overheat indicator bars in the lower screen corners."));
 
-			CreateSettingsMenu();
+			DisplayTimer = Config.Bind<bool>("Interface Options",
+				DisplayTimerKey,
+				true,
+				new ConfigDescription("Displays the timer at the bottom of the screen."));
+
+			HeatMeterScale = Config.Bind<float>("Interface Options",
+				HeatMeterScaleKey,
+				20f,
+				new ConfigDescription("Set the size of the overheat bars.",
+					new AcceptableValueRange<float>(1f, 50f)));
+
+			HeatMetersHorizontalOffset = Config.Bind<int>("Interface Options",
+				HeatMeterHorizontalKey,
+				0,
+				new ConfigDescription("Set the horizontal position offset of the overheat bars.",
+					new AcceptableValueRange<int>(-200, 200)));
+
+			HeatMetersVerticalOffset = Config.Bind<int>("Interface Options",
+				HeatMeterVerticalKey,
+				0,
+				new ConfigDescription("Set the vertical position offset of the overheat bars.",
+					new AcceptableValueRange<int>(-100, 100)));
+
+			TimerScale = Config.Bind<float>("Interface Options",
+				TimerScaleKey,
+				20f,
+				new ConfigDescription("Set the size of the timer.",
+					new AcceptableValueRange<float>(1f, 50f)));
+
+			TimerVerticalOffset = Config.Bind<int>("Interface Options",
+				TimerVeritcalKey,
+				0,
+				new ConfigDescription("Set the vertical position of the timer.",
+					new AcceptableValueRange<int>(-100, 100)));
+
+			HeatBlinkStartAmount = Config.Bind<float>("Advanced Interface Options",
+				HeatBlinkStartAmountKey,
+				0.7f,
+				new ConfigDescription("Set the heat threshold after which the hud starts to blink.",
+					new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+			HeatBlinkFrequency = Config.Bind<float>("Advanced Interface Options",
+				HeatBlinkFrequencyKey,
+				2.0f,
+				new ConfigDescription("Set the hud blink rate (per second).",
+					new AcceptableValueRange<float>(0.0f, 10.0f)));
+
+			HeatBlinkFrequencyBoost = Config.Bind<float>("Advanced Interface Options",
+				HeatBlinkFrequencyBoostKey,
+				1.15f,
+				new ConfigDescription("Sets the blink rate boost.\nThe blink rate at 100% heat is the blink rate times this value (set this to 1 to keep the rate constant).",
+					new AcceptableValueRange<float>(0.0f, 10.0f)));
+
+			HeatBlinkAmount = Config.Bind<float>("Advanced Interface Options",
+				HeatBlinkAmountKey,
+				0.7f,
+				new ConfigDescription("Sets the color intensity of the overheat blink animation (lower values means smaller color changes).",
+					new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+			HeatFlameAmount = Config.Bind<float>("Advanced Interface Options",
+				HeatFlameAmountKey,
+				0.5f,
+				new ConfigDescription("Sets the color intensity of the overheat flame animation (lower values means smaller color changes).",
+					new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+
+			//Apply Patches
+			Logger.LogInfo("Loading...");
+			harmony.PatchAll();
+			Logger.LogInfo("Loaded!");
 		}
 
-		private void OnGUIMenuOpened(MenuOpened.Data data)
+		public void OnEnable()
+        {
+			Flags.SubscribeEvents();
+			//MenuOpened.Subscribe(OnGUIMenuOpened);
+		}
+
+		public void OnDisable()
+        {
+			Flags.UnsubscribeEvents();
+        }
+
+		//This event is dependent on the event from Centrifuge. It turns off the nitronic HUD when the Centrifuge menu opens.
+		//DistanceModConfiguration has this event, but it would never trigger it
+		/*private void OnGUIMenuOpened(MenuOpened.Data data)
 		{
 			if (data.menu.Id != "menu.mod.nitronichud#interface")
 			{
 				VisualDisplay.ForceDisplay = false;
 			}
-		}
+		}*/
 
-		public void LateInitialize(IManager _)
+		public void LateInitialize()
 		{
 			Scripts = new MonoBehaviour[2]
 			{
 				gameObject.AddComponent<VisualCountdown>(),
 				gameObject.AddComponent<VisualDisplay>()
 			};
-		}
-
-		public void CreateSettingsMenu()
-		{
-			// TODO: Write menu docs in instructions.html
-
-			MenuTree advancedDisplayMenu = new MenuTree("menu.mod.nitronichud#interface.advanced", "Advanced Interface Options")
-			{
-				new FloatSlider(MenuDisplayMode.Both, "setting:heat_blink_start_amount", "HEAT BLINK START AMOUNT")
-				.LimitedByRange(0.0f, 1.0f)
-				.WithDefaultValue(0.7f)
-				.WithGetter(() => Config.HeatBlinkStartAmount)
-				.WithSetter(x => Config.HeatBlinkStartAmount = x)
-				.WithDescription("Set the heat treshold after which the hud starts to blink."),
-
-				new FloatSlider(MenuDisplayMode.Both, "setting:heat_blink_frequence", "HEAT BLINK FREQUENCE")
-				.LimitedByRange(0.0f, 10.0f)
-				.WithDefaultValue(2.0f)
-				.WithGetter(() => Config.HeatBlinkFrequence)
-				.WithSetter(x => Config.HeatBlinkFrequence = x)
-				.WithDescription("Set the hud blink rate (per second)."),
-
-				new FloatSlider(MenuDisplayMode.Both, "setting:heat_blink_frequence_boost", "HEAT BLINK FREQUENCE BOOST")
-				.LimitedByRange(0.0f, 10.0f)
-				.WithDefaultValue(1.15f)
-				.WithGetter(() => Config.HeatBlinkFrequenceBoost)
-				.WithSetter(x => Config.HeatBlinkFrequenceBoost = x)
-				.WithDescription("Sets the blink rate boost.\nThe blink rate at 100% heat is the blink rate times this value (set this to 1 to keep the rate constant)."),
-
-				new FloatSlider(MenuDisplayMode.Both, "setting:heat_blink_amount", "HEAT BLINK AMOUNT")
-				.LimitedByRange(0.0f, 1.0f)
-				.WithDefaultValue(0.7f)
-				.WithGetter(() => Config.HeatBlinkAmount)
-				.WithSetter(x => Config.HeatBlinkAmount = x)
-				.WithDescription("Sets the color intensity of the overheat blink animation (lower values means smaller color changes)."),
-
-				new FloatSlider(MenuDisplayMode.Both, "setting:heat_flame_amount", "HEAT FLAME AMOUNT")
-				.WithDefaultValue(0.5f)
-				.LimitedByRange(0.0f, 1.0f)
-				.WithGetter(() => Config.HeatFlameAmount)
-				.WithSetter(x => Config.HeatFlameAmount = x)
-				.WithDescription("Sets the color intensity of the overheat flame animation (lower values means smaller color changes).")
-			};
-
-			MenuTree displayMenu = new MenuTree("menu.mod.nitronichud#interface", "Interface Options")
-			{
-				new CheckBox(MenuDisplayMode.Both, "setting:display_countdown", "SHOW COUNTDOWN")
-				.WithGetter(() => Config.DisplayCountdown)
-				.WithSetter(x => Config.DisplayCountdown = x)
-				.WithDescription("Displays the 3... 2... 1... RUSH countdown when playing a level."),
-
-				new CheckBox(MenuDisplayMode.Both, "setting:display_overheat", "SHOW OVERHEAT METERS")
-				.WithGetter(() => Config.DisplayHeatMeters)
-				.WithSetter(x => Config.DisplayHeatMeters = x)
-				.WithDescription("Displays overheat indicator bars in the lower screen corners."),
-
-				new CheckBox(MenuDisplayMode.Both, "setting:display_timer", "SHOW TIMER")
-				.WithGetter(() => Config.DisplayTimer)
-				.WithSetter(x => Config.DisplayTimer = x)
-				.WithDescription("Displays the timer at the bottom of the screen."),
-
-				new IntegerSlider(MenuDisplayMode.Both, "setting:overheat_scale", "OVERHEAT SCALE")
-				.WithDefaultValue(20)
-				.WithGetter(() => Mathf.RoundToInt(Config.HeatMetersScale * 20.0f))
-				.WithSetter(x => Config.HeatMetersScale = x / 20.0f)
-				.LimitedByRange(1, 50)
-				.WithDescription("Set the size of the overheat bars."),
-
-				new IntegerSlider(MenuDisplayMode.Both, "setting:overheat_horizontal_offset", "OVERHEAT HORIZONTAL POSITION")
-				.WithDefaultValue(0)
-				.WithGetter(() => Config.HeatMetersHorizontalOffset)
-				.WithSetter(x => Config.HeatMetersHorizontalOffset = x)
-				.LimitedByRange(-200, 200)
-				.WithDescription("Set the horizontal position offset of the overheat bars."),
-
-				new IntegerSlider(MenuDisplayMode.Both, "setting:overheat_vertical_offset", "OVERHEAT VERTICAL POSITION")
-				.WithDefaultValue(0)
-				.WithGetter(() => Config.HeatMetersVerticalOffset)
-				.WithSetter(x => Config.HeatMetersVerticalOffset = x)
-				.LimitedByRange(-100, 100)
-				.WithDescription("Set the vertical position offset of the overheat bars."),
-
-				new IntegerSlider(MenuDisplayMode.Both, "setting:timer_scale", "TIMER SCALE")
-				.WithDefaultValue(20)
-				.WithGetter(() => Mathf.RoundToInt(Config.TimerScale * 20.0f))
-				.WithSetter(x => Config.TimerScale = x / 20.0f)
-				.LimitedByRange(1, 50)
-				.WithDescription("Set the size of the timer."),
-
-				new IntegerSlider(MenuDisplayMode.Both, "setting:timer_vertical_offset", "TIMER VERTICAL OFFSET")
-				.WithDefaultValue(0)
-				.WithGetter(() => Config.TimerVerticalOffset)
-				.WithSetter(x => Config.TimerVerticalOffset = x)
-				.LimitedByRange(-100, 100)
-				.WithDescription("Set the vertical position of the timer."),
-
-				new SubMenu(MenuDisplayMode.Both, "menu:interface.advanced", "ADVANCED SETTINGS")
-				.NavigatesTo(advancedDisplayMenu)
-				.WithDescription("Configure advanced settings for the hud."),
-
-				new ActionButton(MenuDisplayMode.Both, "action:preview_hud", "PREVIEW HUD")
-				.WhenClicked(() => VisualDisplay.ForceDisplay = !VisualDisplay.ForceDisplay)
-				.WithDescription("Show the hud to preview changes.")
-			};
-
-			MenuTree audioMenu = new MenuTree("menu.mod.nitronichud#audio", "Audio Options");
-
-			MenuTree settingsMenu = new MenuTree("menu.mod.nitronichud", "Nitronic HUD Settings");
-
-			settingsMenu.Add(
-				new SubMenu(MenuDisplayMode.Both, "menu:interface", "DISPLAY")
-				.NavigatesTo(displayMenu)
-				.WithDescription("Configure settings for the visual interface."));
-
-			if (Application.platform != RuntimePlatform.LinuxPlayer)
-			{
-				settingsMenu.Add(
-				new SubMenu(MenuDisplayMode.Both, "menu:interface", "AUDIO".Colorize(Colors.gray))
-				.NavigatesTo(audioMenu)
-				.WithDescription("Configure audio settings for the countdown announcer."));
-			}
-
-			settingsMenu.Add(
-				new ActionButton(MenuDisplayMode.MainMenu, "menu:interface", "PREVIEW SETTINGS".Colorize(Colors.gray))
-				.WhenClicked(() =>
-				{
-					MessageBox.Create("This feature isn't implemented yet but will be in a future release.", "ERROR")
-					.SetButtons(MessageButtons.Ok)
-					.Show();
-				})
-				.WithDescription("Start the animation sequence thet plays when a level starts to preview the settings."));
-
-			//Menus.AddNew(MenuDisplayMode.Both, settingsMenu, "NITRONIC HUD [1E90FF](BETA)[-]", "Settings for the Nitronic HUD mod.");
-			Menus.AddNew(MenuDisplayMode.Both, settingsMenu, "NITRONIC HUD [FFBF1E](RELEASE CANDIDATE)[-]", "Settings for the Nitronic HUD mod.");
 		}
 	}
 }
